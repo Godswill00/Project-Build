@@ -1,4 +1,4 @@
-git commit -m "fix(deploy): package-relative imports; add root shim, mise.toml and startup logs""""
+"""
 main.py — TraceGuard FastAPI Application
 ========================================
 Entry-point for the network intrusion detection API.
