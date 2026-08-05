@@ -13,6 +13,7 @@ import sys
 import warnings
 from typing import Any, List, Optional
 
+# pyrefly: ignore [missing-import]
 import joblib
 
 # ---------------------------------------------------------------------------

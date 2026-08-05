@@ -10,6 +10,7 @@ PredictionResponse : classifier result, confidence, attack type, SHAP
 
 from typing import Dict, List, Optional
 
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
 
 
