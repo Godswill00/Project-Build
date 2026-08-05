@@ -1,4 +1,4 @@
-"""
+git commit -m "fix(deploy): package-relative imports; add root shim, mise.toml and startup logs""""
 main.py — TraceGuard FastAPI Application
 ========================================
 Entry-point for the network intrusion detection API.
@@ -19,11 +19,12 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# Local modules
-import models_loader
-import provenance_graph as pg
-import shap_explainer
-from schemas import FlowInput, PredictionResponse, ShapEntry
+# Local modules (package-relative imports so Backend.main works when imported
+# as a package module: `Backend.main`)
+from . import models_loader
+from . import provenance_graph as pg
+from . import shap_explainer
+from .schemas import FlowInput, PredictionResponse, ShapEntry
 
 # ---------------------------------------------------------------------------
 # Application lifespan — load models once on startup
