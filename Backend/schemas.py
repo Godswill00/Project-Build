@@ -8,10 +8,28 @@ PredictionResponse : classifier result, confidence, attack type, SHAP
                      explanation, and provenance context.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal
 
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------------------------
+# Auth & Feedback Schemas
+# ---------------------------------------------------------------------------
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class FeedbackRequest(BaseModel):
+    flagged_flow_id: int
+    verdict: Literal["true_positive", "false_positive"]
 
 
 # ---------------------------------------------------------------------------
@@ -174,3 +192,4 @@ class PredictionResponse(BaseModel):
     )
     source_ip: Optional[str] = Field(None, description="Echo of the submitted source IP")
     destination_ip: Optional[str] = Field(None, description="Echo of the submitted destination IP")
+    flagged_flow_id: Optional[int] = Field(None, description="ID of stored flagged flow if malicious")

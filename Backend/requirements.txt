@@ -8,3 +8,8 @@ xgboost==2.1.4
 pandas
 numpy
 pydantic
+sqlalchemy
+pymysql
+python-jose[cryptography]
+passlib[bcrypt]
+pyarrow
