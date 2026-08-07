@@ -33,8 +33,20 @@ export default function Home() {
   const [soundsEnabled, setSoundsEnabled] = useState(true);
   const [language, setLanguage] = useState<Language>("en");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("analyst@traceguard.ai");
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState("analyst");
   const [loginPassword, setLoginPassword] = useState("");
+
+  // Restore saved auth token on mount
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedToken = localStorage.getItem("authToken");
+      if (savedToken) {
+        setAuthToken(savedToken);
+        setIsLoggedIn(true);
+      }
+    }
+  }, []);
 
   // Client-side React state for alert history
   const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([]);
@@ -94,16 +106,25 @@ export default function Home() {
       process.env.NEXT_PUBLIC_API_URL ||
       "https://project-build-production.up.railway.app";
 
+    const token = authToken || (typeof window !== "undefined" ? localStorage.getItem("authToken") : null);
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     try {
       const res = await fetch(`${apiUrl}/predict`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(flowFeatures),
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Authentication required. Please click Settings to log in as an Analyst.");
+        }
         throw new Error(
           `Backend returned status ${res.status}: ${res.statusText || "Prediction failed"}`
         );
@@ -130,20 +151,43 @@ export default function Home() {
       console.error("API Prediction error:", err);
       playNotificationSound("error");
       setErrorMessage(
-        err.message || "Failed to reach FastAPI backend on Railway. Please check network connectivity."
+        err.message || "Failed to reach FastAPI backend. Please check network connectivity."
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUpdateVerdict = (
+  const handleUpdateVerdict = async (
     alertId: string,
     verdict: "true_positive" | "false_positive"
   ) => {
     setAlertHistory((prev) =>
       prev.map((item) => (item.id === alertId ? { ...item, verdict } : item))
     );
+
+    const targetAlert = alertHistory.find((item) => item.id === alertId);
+    const token = authToken || (typeof window !== "undefined" ? localStorage.getItem("authToken") : null);
+    if (targetAlert?.flagged_flow_id && token) {
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL ||
+        "https://project-build-production.up.railway.app";
+      try {
+        await fetch(`${apiUrl}/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            flagged_flow_id: targetAlert.flagged_flow_id,
+            verdict,
+          }),
+        });
+      } catch (err) {
+        console.error("Failed to submit feedback to backend:", err);
+      }
+    }
   };
 
   const handleAnalyzeFlowWithSound = async () => {
@@ -151,15 +195,41 @@ export default function Home() {
     await handleAnalyzeFlow();
   };
 
-  const handleLogin = () => {
-    if (loginEmail.trim() && loginPassword.trim()) {
+  const handleLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) return;
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://project-build-production.up.railway.app";
+    try {
+      const res = await fetch(`${apiUrl}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: loginEmail, password: loginPassword }),
+      });
+      if (!res.ok) {
+        throw new Error("Invalid username or password");
+      }
+      const data = await res.json();
+      const token = data.access_token;
+      setAuthToken(token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("authToken", token);
+      }
       setIsLoggedIn(true);
       setSettingsOpen(false);
+      setErrorMessage(null);
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      setErrorMessage(err.message || "Login failed. Please check credentials.");
     }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setAuthToken(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("authToken");
+    }
     setLoginPassword("");
   };
 
