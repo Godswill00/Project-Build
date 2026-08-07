@@ -116,22 +116,25 @@ def init_db() -> bool:
         session = get_db_session()
         if session:
             try:
-                user_count = session.query(func.count(User.id)).scalar()
-                if user_count == 0:
-                    analyst_user = os.environ.get("ANALYST_USERNAME", "analyst")
-                    analyst_pass = os.environ.get("ANALYST_PASSWORD", "analyst123")
-                    
-                    # Avoid circular import by importing hash_password inside function
-                    from .auth import hash_password
-                    password_hash = hash_password(analyst_pass)
-                    
+                analyst_user = os.environ.get("ANALYST_USERNAME", "analyst")
+                analyst_pass = os.environ.get("ANALYST_PASSWORD", "analyst123")
+                
+                from .auth import hash_password
+                password_hash = hash_password(analyst_pass)
+
+                existing_user = session.query(User).filter(User.username == analyst_user).first()
+                if existing_user:
+                    existing_user.password_hash = password_hash
+                    session.commit()
+                    print(f"[database] OK Synchronized analyst user '{analyst_user}'.")
+                else:
                     new_user = User(username=analyst_user, password_hash=password_hash)
                     session.add(new_user)
                     session.commit()
-                    print(f"[database] OK Seeded initial analyst user '{analyst_user}'.")
+                    print(f"[database] OK Seeded analyst user '{analyst_user}'.")
             except Exception as seed_err:
                 session.rollback()
-                print(f"[database] ERR Seeding initial analyst user failed: {seed_err}")
+                print(f"[database] ERR Seeding analyst user failed: {seed_err}")
             finally:
                 session.close()
         return True
