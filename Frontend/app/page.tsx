@@ -8,8 +8,12 @@ import { AlertQueue } from "../components/AlertQueue";
 import { ShapChart } from "../components/ShapChart";
 import { ProvenanceGraph } from "../components/ProvenanceGraph";
 import { FeedbackButtons } from "../components/FeedbackButtons";
+import { SettingsPanel } from "../components/SettingsPanel";
 import { sampleFlows } from "../lib/sampleFlows";
 import { AlertHistoryItem, PredictResponse, SampleFlow } from "../lib/types";
+
+type Language = "en" | "es" | "pt" | "it" | "ja" | "zh";
+
 import {
   Play,
   Loader2,
@@ -24,6 +28,13 @@ export default function Home() {
   const [selectedFlowId, setSelectedFlowId] = useState<string>(sampleFlows[0].id);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [soundsEnabled, setSoundsEnabled] = useState(true);
+  const [language, setLanguage] = useState<Language>("en");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("analyst@traceguard.ai");
+  const [loginPassword, setLoginPassword] = useState("");
 
   // Client-side React state for alert history
   const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([]);
@@ -31,6 +42,43 @@ export default function Home() {
   const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
 
   const activeAlert = alertHistory.find((item) => item.id === activeAlertId) || null;
+
+  const playNotificationSound = (tone: "start" | "success" | "error") => {
+    if (!soundsEnabled || typeof window === "undefined") return;
+
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    const audioContext = new AudioContextCtor();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    const noteConfig = {
+      start: { frequency: 720, duration: 0.12, gain: 0.03 },
+      success: [
+        { frequency: 880, duration: 0.08, gain: 0.03 },
+        { frequency: 1120, duration: 0.14, gain: 0.025 },
+      ],
+      error: { frequency: 280, duration: 0.2, gain: 0.03 },
+    } as const;
+
+    const sequence = tone === "success" ? noteConfig.success : [noteConfig[tone]];
+
+    sequence.forEach((note, index) => {
+      const noteOscillator = audioContext.createOscillator();
+      const noteGain = audioContext.createGain();
+      noteOscillator.type = "sine";
+      noteOscillator.frequency.setValueAtTime(note.frequency, audioContext.currentTime + index * 0.08);
+      noteGain.gain.setValueAtTime(note.gain, audioContext.currentTime + index * 0.08);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + index * 0.08 + 0.12);
+      noteOscillator.connect(noteGain);
+      noteGain.connect(audioContext.destination);
+      noteOscillator.start(audioContext.currentTime + index * 0.08);
+      noteOscillator.stop(audioContext.currentTime + index * 0.08 + note.duration);
+    });
+
+    setTimeout(() => audioContext.close().catch(() => undefined), 400);
+  };
 
   const handleAnalyzeFlow = async () => {
     const targetFlow = sampleFlows.find((f) => f.id === selectedFlowId);
@@ -77,8 +125,10 @@ export default function Home() {
 
       setAlertHistory((prev) => [newAlert, ...prev]);
       setActiveAlertId(newAlert.id);
+      playNotificationSound("success");
     } catch (err: any) {
       console.error("API Prediction error:", err);
+      playNotificationSound("error");
       setErrorMessage(
         err.message || "Failed to reach FastAPI backend on Railway. Please check network connectivity."
       );
@@ -96,14 +146,132 @@ export default function Home() {
     );
   };
 
+  const handleAnalyzeFlowWithSound = async () => {
+    playNotificationSound("start");
+    await handleAnalyzeFlow();
+  };
+
+  const handleLogin = () => {
+    if (loginEmail.trim() && loginPassword.trim()) {
+      setIsLoggedIn(true);
+      setSettingsOpen(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setLoginPassword("");
+  };
+
+  const translations = {
+    en: {
+      dashboardTitle: "NetFlow Ingestion & Analysis",
+      dashboardDescription: "Select an offline flow sample representing real network captures to submit to the classifier.",
+      targetFlowLabel: "Target Flow Sample",
+      sourceIp: "Src IP",
+      destinationIp: "Dst IP",
+      ports: "Ports",
+      packets: "Pkts",
+      analyze: "Analyze Flow",
+      running: "Running TreeSHAP & NetworkX...",
+      analysisFailed: "Analysis Failed",
+      confidence: "Confidence Score",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "Alert Queue",
+      alertQueueDescription: "Review the latest detections and their status.",
+    },
+    es: {
+      dashboardTitle: "Ingreso y análisis de NetFlow",
+      dashboardDescription: "Seleccione una muestra de flujo offline que represente capturas reales de red para enviarla al clasificador.",
+      targetFlowLabel: "Muestra de flujo objetivo",
+      sourceIp: "IP origen",
+      destinationIp: "IP destino",
+      ports: "Puertos",
+      packets: "Paquetes",
+      analyze: "Analizar flujo",
+      running: "Ejecutando TreeSHAP y NetworkX...",
+      analysisFailed: "Análisis fallido",
+      confidence: "Puntuación de confianza",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "Cola de alertas",
+      alertQueueDescription: "Revise las últimas detecciones y su estado.",
+    },
+    pt: {
+      dashboardTitle: "Ingresso e análise de NetFlow",
+      dashboardDescription: "Selecione uma amostra de fluxo offline representando capturas reais de rede para enviar ao classificador.",
+      targetFlowLabel: "Amostra de fluxo alvo",
+      sourceIp: "IP de origem",
+      destinationIp: "IP de destino",
+      ports: "Portas",
+      packets: "Pacotes",
+      analyze: "Analisar fluxo",
+      running: "Executando TreeSHAP e NetworkX...",
+      analysisFailed: "Falha na análise",
+      confidence: "Pontuação de confiança",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "Fila de alertas",
+      alertQueueDescription: "Revise as últimas detecções e seus status.",
+    },
+    it: {
+      dashboardTitle: "Ingresso e analisi NetFlow",
+      dashboardDescription: "Seleziona un campione di flusso offline che rappresenti acquisizioni di rete reali da inviare al classificatore.",
+      targetFlowLabel: "Campione di flusso di destinazione",
+      sourceIp: "IP sorgente",
+      destinationIp: "IP destinazione",
+      ports: "Porte",
+      packets: "Pacchetti",
+      analyze: "Analizza flusso",
+      running: "Esecuzione di TreeSHAP e NetworkX...",
+      analysisFailed: "Analisi non riuscita",
+      confidence: "Punteggio di affidabilità",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "Coda avvisi",
+      alertQueueDescription: "Controlla le ultime rilevazioni e il loro stato.",
+    },
+    ja: {
+      dashboardTitle: "NetFlowの取り込みと分析",
+      dashboardDescription: "分類器に送信するために、実際のネットワークキャプチャを表すオフラインフロースサンプルを選択します。",
+      targetFlowLabel: "対象フロースサンプル",
+      sourceIp: "送信元IP",
+      destinationIp: "宛先IP",
+      ports: "ポート",
+      packets: "パケット",
+      analyze: "フローを解析",
+      running: "TreeSHAPとNetworkXを実行中...",
+      analysisFailed: "分析に失敗しました",
+      confidence: "信頼度スコア",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "アラートキュー",
+      alertQueueDescription: "最新の検知結果とその状態を確認します。",
+    },
+    zh: {
+      dashboardTitle: "NetFlow 接入与分析",
+      dashboardDescription: "选择一个代表真实网络捕获的离线流样本，以提交给分类器。",
+      targetFlowLabel: "目标流样本",
+      sourceIp: "源 IP",
+      destinationIp: "目标 IP",
+      ports: "端口",
+      packets: "数据包",
+      analyze: "分析流",
+      running: "正在运行 TreeSHAP 与 NetworkX...",
+      analysisFailed: "分析失败",
+      confidence: "置信分数",
+      unknown: "10.0.0.x",
+      alertQueueTitle: "告警队列",
+      alertQueueDescription: "查看最新检测结果及其状态。",
+    },
+  };
+
+  const t = translations[language];
+
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-900 font-sans antialiased">
+    <div className={`flex min-h-screen font-sans antialiased transition-colors ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900"}`}>
       {/* Fixed Left Sidebar */}
-      <Sidebar />
+      <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <Header />
+<Header theme={theme} isLoggedIn={isLoggedIn} language={language} />
 
         <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-[1600px] w-full mx-auto">
           {/* Top Stat Cards */}
@@ -118,17 +286,17 @@ export default function Home() {
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
                   <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                    NetFlow Ingestion & Analysis
+                    {t.dashboardTitle}
                   </h2>
                 </div>
                 <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                  Select a offline flow sample representing real network captures to submit to the classifier.
+                  {t.dashboardDescription}
                 </p>
 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Target Flow Sample
+                      {t.targetFlowLabel}
                     </label>
                     <select
                       value={selectedFlowId}
@@ -150,31 +318,31 @@ export default function Home() {
                     return (
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 text-[11px] font-mono space-y-1">
                         <div className="flex justify-between text-slate-600">
-                          <span>Src IP: <strong className="text-slate-900">{currentSample.source_ip}</strong></span>
-                          <span>Dst IP: <strong className="text-slate-900">{currentSample.destination_ip}</strong></span>
+                          <span>{t.sourceIp}: <strong className="text-slate-900">{currentSample.source_ip}</strong></span>
+                          <span>{t.destinationIp}: <strong className="text-slate-900">{currentSample.destination_ip}</strong></span>
                         </div>
                         <div className="flex justify-between text-slate-500">
-                          <span>Ports: {currentSample.L4_SRC_PORT} &rarr; {currentSample.L4_DST_PORT}</span>
-                          <span>Pkts: {currentSample.IN_PKTS + currentSample.OUT_PKTS}</span>
+                          <span>{t.ports}: {currentSample.L4_SRC_PORT} &rarr; {currentSample.L4_DST_PORT}</span>
+                          <span>{t.packets}: {currentSample.IN_PKTS + currentSample.OUT_PKTS}</span>
                         </div>
                       </div>
                     );
                   })()}
 
                   <button
-                    onClick={handleAnalyzeFlow}
+                    onClick={handleAnalyzeFlowWithSound}
                     disabled={isLoading}
                     className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-2.5 px-4 rounded-xl text-xs shadow-sm transition-all duration-150 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Running TreeSHAP & NetworkX...</span>
+                        <span>{t.running}</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-4 h-4 fill-white" />
-                        <span>Analyze Flow</span>
+                        <span>{t.analyze}</span>
                       </>
                     )}
                   </button>
@@ -184,7 +352,7 @@ export default function Home() {
                     <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2 text-rose-700 text-xs">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-semibold">Analysis Failed</p>
+                        <p className="font-semibold">{t.analysisFailed}</p>
                         <p className="text-[11px] mt-0.5">{errorMessage}</p>
                       </div>
                     </div>
@@ -238,7 +406,7 @@ export default function Home() {
 
                       <div className="text-right">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                          Confidence Score
+                          {t.confidence}
                         </p>
                         <p className="text-3xl font-black text-indigo-600">
                           {(activeAlert.confidence * 100).toFixed(1)}%
@@ -253,12 +421,12 @@ export default function Home() {
                     <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200/80 font-mono text-xs text-slate-700">
                       <div>
                         <span className="text-slate-400">Source Host: </span>
-                        <span className="font-bold text-slate-900">{activeAlert.source_ip || "10.0.0.x"}</span>
+                        <span className="font-bold text-slate-900">{activeAlert.source_ip || t.unknown}</span>
                       </div>
                       <ArrowRight className="w-4 h-4 text-slate-400" />
                       <div>
                         <span className="text-slate-400">Destination Host: </span>
-                        <span className="font-bold text-slate-900">{activeAlert.destination_ip || "192.168.1.x"}</span>
+                        <span className="font-bold text-slate-900">{activeAlert.destination_ip || t.unknown}</span>
                       </div>
                     </div>
                   </div>
@@ -291,7 +459,7 @@ export default function Home() {
                   </div>
                   <h3 className="text-lg font-bold text-slate-900">Select or Analyze a Flow</h3>
                   <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-                    Choose one of the 6 pre-configured NetFlow samples from the left panel and click &quot;Analyze Flow&quot; to send it to the live FastAPI backend for TreeSHAP & NetworkX attribution.
+                    Choose one of the 6 pre-configured NetFlow samples from the left panel and click &quot;{t.analyze}&quot; to send it to the live FastAPI backend for TreeSHAP & NetworkX attribution.
                   </p>
                 </div>
               )}
@@ -299,6 +467,24 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        theme={theme}
+        onThemeChange={setTheme}
+        soundsEnabled={soundsEnabled}
+        onSoundsChange={setSoundsEnabled}
+        isLoggedIn={isLoggedIn}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        loginEmail={loginEmail}
+        onEmailChange={setLoginEmail}
+        loginPassword={loginPassword}
+        onPasswordChange={setLoginPassword}
+        language={language}
+        onLanguageChange={setLanguage}
+      />
     </div>
   );
 }

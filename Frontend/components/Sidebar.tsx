@@ -3,9 +3,10 @@ import { Shield, LayoutDashboard, History, Settings, Activity } from "lucide-rea
 
 interface SidebarProps {
   activeTab?: string;
+  onOpenSettings?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = () => {
+export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col min-h-screen border-r border-slate-800 shrink-0">
       {/* Brand Header */}
@@ -40,7 +41,10 @@ export const Sidebar: React.FC<SidebarProps> = () => {
           System
         </div>
 
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-all border-l-4 border-transparent">
+        <button
+          onClick={onOpenSettings}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-all border-l-4 border-transparent"
+        >
           <Settings className="w-4 h-4" />
           <span>Settings</span>
         </button>
