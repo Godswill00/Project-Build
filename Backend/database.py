@@ -63,11 +63,16 @@ def get_db_url() -> str:
     db_url_override = os.environ.get("DATABASE_URL")
     if db_url_override:
         return db_url_override
-    user = os.environ.get("MYSQLUSER", "")
-    password = os.environ.get("MYSQLPASSWORD", "")
-    host = os.environ.get("MYSQLHOST", "localhost")
+    user = os.environ.get("MYSQLUSER")
+    password = os.environ.get("MYSQLPASSWORD")
+    host = os.environ.get("MYSQLHOST")
     port = os.environ.get("MYSQLPORT", "3306")
-    database = os.environ.get("MYSQLDATABASE", "")
+    database = os.environ.get("MYSQLDATABASE")
+
+    if not (user and host and database):
+        # Local development fallback when MySQL env vars are not defined
+        return "sqlite:///./traceguard_local.db"
+
     return f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}"
 
 
