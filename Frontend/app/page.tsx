@@ -35,15 +35,45 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [loginEmail, setLoginEmail] = useState("analyst");
-  const [loginPassword, setLoginPassword] = useState("");
+  const [loginPassword, setLoginPassword] = useState("analyst123");
 
-  // Restore saved auth token on mount
+  const autoAuthenticate = async (email?: string, password?: string) => {
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://project-build-production.up.railway.app";
+    const user = email || loginEmail || "analyst";
+    const pass = password || loginPassword || "analyst123";
+    try {
+      const res = await fetch(`${apiUrl}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: user, password: pass }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const token = data.access_token;
+        setAuthToken(token);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("authToken", token);
+        }
+        setIsLoggedIn(true);
+        return token;
+      }
+    } catch (err) {
+      console.error("Auto-authentication error:", err);
+    }
+    return null;
+  };
+
+  // Restore saved auth token on mount, or auto-authenticate automatically
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const savedToken = localStorage.getItem("authToken");
       if (savedToken) {
         setAuthToken(savedToken);
         setIsLoggedIn(true);
+      } else {
+        autoAuthenticate();
       }
     }
   }, []);
@@ -106,7 +136,11 @@ export default function Home() {
       process.env.NEXT_PUBLIC_API_URL ||
       "https://project-build-production.up.railway.app";
 
-    const token = authToken || (typeof window !== "undefined" ? localStorage.getItem("authToken") : null);
+    let token = authToken || (typeof window !== "undefined" ? localStorage.getItem("authToken") : null);
+    if (!token) {
+      token = await autoAuthenticate();
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -115,16 +149,26 @@ export default function Home() {
     }
 
     try {
-      const res = await fetch(`${apiUrl}/predict`, {
+      let res = await fetch(`${apiUrl}/predict`, {
         method: "POST",
         headers,
         body: JSON.stringify(flowFeatures),
       });
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Authentication required. Please click Settings to log in as an Analyst.");
+      if (!res.ok && res.status === 401) {
+        // Auto-reauthenticate if token expired or missing
+        const newToken = await autoAuthenticate();
+        if (newToken) {
+          headers["Authorization"] = `Bearer ${newToken}`;
+          res = await fetch(`${apiUrl}/predict`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(flowFeatures),
+          });
         }
+      }
+
+      if (!res.ok) {
         throw new Error(
           `Backend returned status ${res.status}: ${res.statusText || "Prediction failed"}`
         );
