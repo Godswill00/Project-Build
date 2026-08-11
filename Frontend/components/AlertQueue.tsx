@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { AlertHistoryItem } from "../lib/types";
 import { AlertTriangle, CheckCircle2, Clock, MousePointerClick } from "lucide-react";
 
@@ -13,31 +13,67 @@ export const AlertQueue: React.FC<AlertQueueProps> = ({
   activeAlertId,
   onSelectAlert,
 }) => {
-  // Sort by confidence descending
-  const sortedAlerts = [...alertHistory].sort(
-    (a, b) => b.confidence - a.confidence
-  );
+  // Toggle sort order: "needs_review" (ascending - default) vs "highest_confidence" (descending)
+  const [sortOrder, setSortOrder] = useState<"needs_review" | "highest_confidence">("needs_review");
+
+  // Sort by confidence ascending (lowest confidence first) by default
+  const sortedAlerts = [...alertHistory].sort((a, b) => {
+    if (sortOrder === "needs_review") {
+      return a.confidence - b.confidence;
+    }
+    return b.confidence - a.confidence;
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>Alert Queue</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">
-              {sortedAlerts.length}
-            </span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Sorted by confidence descending
-          </p>
+      <div className="p-4 bg-slate-50/80 border-b border-slate-200 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <span>Alerts Requiring Review</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">
+                {sortedAlerts.length}
+              </span>
+            </h2>
+          </div>
+
+          {/* Sort Order Toggle */}
+          <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[11px] font-medium text-slate-600">
+            <button
+              onClick={() => setSortOrder("needs_review")}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                sortOrder === "needs_review"
+                  ? "bg-white text-slate-900 font-semibold shadow-xs"
+                  : "hover:text-slate-900"
+              }`}
+            >
+              Needs Review
+            </button>
+            <button
+              onClick={() => setSortOrder("highest_confidence")}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                sortOrder === "highest_confidence"
+                  ? "bg-white text-slate-900 font-semibold shadow-xs"
+                  : "hover:text-slate-900"
+              }`}
+            >
+              Highest Confidence
+            </button>
+          </div>
         </div>
+
+        {/* Explanatory description line */}
+        <p className="text-xs text-slate-500 leading-relaxed">
+          {sortOrder === "needs_review"
+            ? "These alerts are shown first because the model's confidence is lowest, meaning they are most likely to benefit from your review."
+            : "Displaying alerts sorted by highest confidence score first."}
+        </p>
       </div>
 
       <div className="p-3 space-y-2 overflow-y-auto max-h-[520px] flex-1">
         {sortedAlerts.length === 0 ? (
           <div className="py-12 px-4 text-center">
-            <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-between justify-center text-slate-400 mb-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
               <MousePointerClick className="w-6 h-6" />
             </div>
             <p className="text-sm font-medium text-slate-700">No Flows Analyzed Yet</p>
